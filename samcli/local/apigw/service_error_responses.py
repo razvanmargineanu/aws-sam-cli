@@ -8,9 +8,11 @@ class ServiceErrorResponses:
     _NO_LAMBDA_INTEGRATION = {"message": "No function defined for resource method"}
     _MISSING_AUTHENTICATION = {"message": "Missing Authentication Token"}
     _LAMBDA_FAILURE = {"message": "Internal server error"}
+    _GATEWAY_TIMEOUT = {"message": "Gateway Timeout"}
 
     HTTP_STATUS_CODE_502 = 502
     HTTP_STATUS_CODE_403 = 403
+    HTTP_STATUS_CODE_504 = 504
 
     @staticmethod
     def lambda_failure_response(*args):
@@ -42,3 +44,8 @@ class ServiceErrorResponses:
         """
         response_data = jsonify(ServiceErrorResponses._MISSING_AUTHENTICATION)
         return make_response(response_data, ServiceErrorResponses.HTTP_STATUS_CODE_403)
+
+    @staticmethod
+    def gateway_timeout(*args):
+        response_data = jsonify(ServiceErrorResponses._GATEWAY_TIMEOUT)
+        return make_response(response_data, ServiceErrorResponses.HTTP_STATUS_CODE_504)

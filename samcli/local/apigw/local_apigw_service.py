@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import base64
+import threading
 from typing import List, Optional
 
 from flask import Flask, request
@@ -137,6 +138,7 @@ class LocalApigwService(BaseLocalService):
         self.static_dir = static_dir
         self._dict_of_routes = {}
         self.stderr = stderr
+        self._lock = threading.BoundedSemaphore()
 
     def create(self):
         """
@@ -154,6 +156,10 @@ class LocalApigwService(BaseLocalService):
 
         # Prevent the dev server from emitting headers that will make the browser cache response by default
         self._app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+        self._app.before_request(self._block_concurrent_requests)
+        self._app.teardown_request(self._release_request_lock)
+
 
         # This will normalize all endpoints and strip any trailing '/'
         self._app.url_map.strict_slashes = False
@@ -256,6 +262,7 @@ class LocalApigwService(BaseLocalService):
         self._app.register_error_handler(405, ServiceErrorResponses.route_not_found)
         # Something went wrong
         self._app.register_error_handler(500, ServiceErrorResponses.lambda_failure_response)
+        self._app.register_error_handler(504, ServiceErrorResponses.gateway_timeout)
 
     def _request_handler(self, **kwargs):
         """
@@ -838,3 +845,16 @@ class LocalApigwService(BaseLocalService):
 
         """
         return request_mimetype in binary_types or "*/*" in binary_types
+
+    def _block_concurrent_requests(self):
+        # Use the hard timeout of APIG for integrations for each request.
+        acquired = self._lock.acquire(timeout=29)
+
+        if not acquired:
+            return ServiceErrorResponses.gateway_timeout()
+
+    def _release_request_lock(self, error=None):
+        try:
+            self._lock.release()
+        except ValueError:
+            LOG.debug("Tried to release more than it should.")
